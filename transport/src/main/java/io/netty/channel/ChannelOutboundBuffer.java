@@ -339,8 +339,8 @@ public final class ChannelOutboundBuffer {
                 // 删除 buf 释放资源
                 remove();
             } else { // readableBytes > writtenBytes
-                // buf 可读字节数 > 已经对外发送的字节数，说明这条消息还没有被完整发送出去，
-                // 发生了 “写半包” 问题
+                // SQ: buf 可读字节数 > 已经对外发送的字节数，说明这条消息还没有被完整发送出去，
+                //  发生了 “写半包” 问题
                 if (writtenBytes != 0) {
                     buf.readerIndex(readerIndex + (int) writtenBytes);
                     progress(writtenBytes);

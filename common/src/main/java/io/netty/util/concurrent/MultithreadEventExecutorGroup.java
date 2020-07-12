@@ -76,13 +76,13 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
 
         if (executor == null) {
             // SQ: ThreadPerTaskExecutor 为每个 task 创建一个新的线程中；
-            // 但是对于 EventLoop 来说，主循环 run() 就是一个 task，所以用 ThreadPerTaskExecutor 是没问题的，
-            // 相当于创建一个新的线程用来执行主循环；
+            //  但是对于 EventLoop 来说，主循环 run() 就是一个 task，所以用 ThreadPerTaskExecutor 是没问题的，
+            //  相当于创建一个新的线程用来执行主循环；
             executor = new ThreadPerTaskExecutor(newDefaultThreadFactory());
         }
 
         // SQ: NioEventLoopGroup 相当于一个线程池，
-        // 这里的 children 类型都是 NioEventLoop，每个 NioEventLoop 相当于池中的一个线程（运行主循环）
+        //  这里的 children 类型都是 NioEventLoop，每个 NioEventLoop 相当于池中的一个线程（运行主循环）
         children = new EventExecutor[nThreads];
 
         for (int i = 0; i < nThreads; i ++) {

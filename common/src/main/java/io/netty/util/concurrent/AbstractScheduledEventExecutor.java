@@ -96,7 +96,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
         if (scheduledTask.deadlineNanos() <= nanoTime) {
             // SQ: 当前时间已到（或超过）执行时间，可以执行任务了；
-            // 注意取任务时用的是 peek 操作，并未"弹出"任务，因此此处要显式 remove；
+            //  注意取任务时用的是 peek 操作，并未"弹出"任务，因此此处要显式 remove；
             scheduledTaskQueue.remove();
             return scheduledTask;
         }

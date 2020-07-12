@@ -52,6 +52,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
      * @param ch                the underlying {@link SelectableChannel} on which it operates
      */
     protected AbstractNioByteChannel(Channel parent, SelectableChannel ch) {
+        // SQ: 构造时即时指定了 监听 OP_READ 事件，子类 NioSocketChannel 也复用此构造逻辑；
+        //  （对比：NioServerSocketChannel 构造时指定了监听 OP_ACCEPT 事件）
         super(parent, ch, SelectionKey.OP_READ);
     }
 
@@ -159,7 +161,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
-        // SQ：write 操作的最大自旋数目
+        // SQ: write 操作的最大自旋数目
         int writeSpinCount = -1;
 
         boolean setOpWrite = false;
@@ -169,7 +171,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             Object msg = in.current();
             if (msg == null) {
                 // SQ: ChannelOutboundBuffer 中所有待发送消息都已处理完毕，不需再写了，
-                // 因此清除 OP_WRITE 标识，并退出循环
+                //  因此清除 OP_WRITE 标识，并退出循环
 
                 // Wrote all messages.
                 clearOpWrite();
@@ -198,8 +200,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                     int localFlushedAmount = doWriteBytes(buf);
                     if (localFlushedAmount == 0) {
                         //  SQ: 可写字节数为0，说明[待写Channel]已满，
-                        //  此时再自旋已经没意义，需要先写出去一部分消息腾出[待写Channel]的缓冲区空间，
-                        //  因此设置 opWrite 可写标识为 true
+                        //   此时再自旋已经没意义，需要先写出去一部分消息腾出[待写Channel]的缓冲区空间，
+                        //   因此设置 opWrite 可写标识为 true
                         setOpWrite = true;
                         break;
                     }
@@ -286,7 +288,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         // Did not write completely.
         if (setOpWrite) {
             // SQ: [待写Channel]的缓冲区满，开启 OP_WRITE 标识，EventLoop 会将缓冲区的消息写出去，腾出缓冲区空间；
-            // 设置 OP_WRITE 之后就不需要像下面分支这样显式通知 EventLoop 去 flush 了
+            //  设置 OP_WRITE 之后就不需要像下面分支这样显式通知 EventLoop 去 flush 了
             setOpWrite();
         } else {
             // Schedule flush again later so other tasks can be picked up in the meantime

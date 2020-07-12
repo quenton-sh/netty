@@ -170,7 +170,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) throws Exception {
-                // SQ: initChannel 事件：只执行一次，执行完毕后会把自己从 Pipeline 中移除
+                // SQ: initChannel 在 handlerAdded(ctx) 事件处理方法中被调用，执行完毕后会自动把自己从 Pipeline 中移除；
+                //  所以这里的代码只被执行一次；
+
+                // SQ: 对于 ServerBootstrap 初始化场景，所有 handlerAdded(ctx) 事件处理方法在 channel 执行 register 时被统一调用，
+                //  参见 AbstractChannel.register0(...) 方法，会在 eventLoop 线程中被执行，其中会调用 pipeline.invokeHandlerAddedIfNeeded()
 
                 final ChannelPipeline pipeline = ch.pipeline();
                 ChannelHandler handler = config.handler();
@@ -182,11 +186,22 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                 // In this case the initChannel(...) method will only be called after this method returns. Because
                 // of this we need to ensure we add our handler in a delayed fashion so all the users handler are
                 // placed in front of the ServerBootstrapAcceptor.
+
+                // SQ: 上面注释的大概意思是，用户可能使用了 ChannelInitializer，
+                //  initChannel() 方法中的代码在该方法返回后才会被执行（ register0 时才被执行），
+                //  必须保证在所有 ChannelInitializer 中的代码执行完毕后，最后添加 ServerBootstrapAcceptor，
+                //  因此把添加 ServerBootstrapAcceptor 的工作放到 EventLoop 中去做，
+                //  因为 register0 是在 eventLoop 线程中被执行的，此处向 eventLoop 中添加任务，则此任务一定会排队在 register0 后面，
+                //  即可保证 在 register0 -> ChannelInitializer.initChannel(...) 执行完毕后，才会添加 ServerBootstrapAcceptor.
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
-                        pipeline.addLast(new ServerBootstrapAcceptor(
-                                ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs));
+                        pipeline.addLast(new ServerBootstrapAcceptor(ch,
+                            // SQ: 注意此处是 ServerBootstrap 中唯一使用 childGroup 的地方
+                            currentChildGroup,
+                            // SQ: 注意此处是 ServerBootstrap 中唯一使用 childHandler 的地方
+                            currentChildHandler,
+                            currentChildOptions, currentChildAttrs));
                     }
                 });
             }
@@ -248,7 +263,16 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // SQ: 这里的 msg 为什么是 Channel 对象呢？
+            //  --> NioServerSocketChannel.doReadMessages(buf) 方法会将 accept 的 SocketChannel 对象包装为 NioSocketChannel，
+            //          并放入 buf 数组中，然后在 AbstractNioMessageChannel.NioMessageUnsafe.read() 方法中，
+            //          会遍历取出 buf 数组中的对象，对 Pipeline 执行 fireChannelRead(buf)，即会调用到这里；
+
+            // SQ: child 对象是 NioServerSocketChannel 将 jdk SocketChannel 包装成的 NioSocketChannel，附带一个 Pipeline；
             final Channel child = (Channel) msg;
+
+            // SQ: channelRead 方法只在 accept 时被执行，
+            //   因此对 child 的 pipeline 添加各种 handler 等也只 accept 时执行一次
 
             child.pipeline().addLast(childHandler);
 
@@ -259,6 +283,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
 
             try {
+                // SQ: 把 NioSocketChannel 注册到 workerGroup(childGroup) 中的 EventLoop 上；
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
@@ -290,7 +315,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             // a chance to do something with it
             ctx.fireExceptionCaught(cause);
         }
-    }
+    } // end of ServerBootstrapAcceptor
 
     @Override
     @SuppressWarnings("CloneDoesntCallSuperClone")

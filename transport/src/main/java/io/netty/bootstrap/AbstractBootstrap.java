@@ -280,9 +280,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
-        // SQ: 创建新 Channel，对其初始化，并将其注册到 EventLoop 上，
-        // 注册的过程在 EventLoop 线程中执行，此处拿到 regFuture 跟进其是否完成
+        // SQ: 注：每 bind 一个端口生成一个 NioServerSocketChannel；
+
+        // SQ: 创建新 NioServerSocketChannel，对其初始化，并将其注册到 EventLoop 上，
+        //  注册的过程在 EventLoop 线程中执行，此处拿到 DefaultChannelPromise 对象用于观察 register 是否完成
         final ChannelFuture regFuture = initAndRegister();
+
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
             return regFuture;
@@ -290,11 +293,15 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
+
+            // SQ: register 已经完成，直接 doBind0
             ChannelPromise promise = channel.newPromise();
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
+
+            // SQ: register 尚未完成，注册回调，在回调中执行 doBind0
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             regFuture.addListener(new ChannelFutureListener() {
                 @Override
@@ -322,6 +329,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         Channel channel = null;
         try {
             channel = channelFactory.newChannel();
+
+            // SQ: init 方法由子类做不同的实现：
+            //  ServerBootstrap:
+            //      1. 设置各类 Options 和 Attrs
+            //      2. 向 Pipeline 末尾添加通过 ServerBootstrap.handler(xxx) 方法所设置的 Handler
+            //      3. 向 Pipeline 末尾添加 ServerBootstrapAcceptor
+            //  Bootstrap:
+            //      只设置各类 Options 和 Attrs.
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -332,6 +347,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        // SQ: channel 会被注册到 bossGroup 中的某个 EventLoop 上
+        //  最综会在 EventLoop 线程中调用 AbstractChannel.register0()
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -356,17 +373,24 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     // SQ: ServerBootstrap 和 Bootstrap 的 init 方法不同
     abstract void init(Channel channel) throws Exception;
 
+    // SQ: 执行 bind，即监听端口
     private static void doBind0(
             final ChannelFuture regFuture, final Channel channel,
             final SocketAddress localAddress, final ChannelPromise promise) {
 
         // This method is invoked before channelRegistered() is triggered.  Give user handlers a chance to set up
         // the pipeline in its channelRegistered() implementation.
+        // SQ: bind 过程在 eventLoop 线程中执行
         channel.eventLoop().execute(new Runnable() {
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
-                    channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+                    // SQ: channel.bind() 会在 Pipeline 上传播 bind 事件，各 handler 依次执行 bind(...)，
+                    //  Pipeline 最后调用到 DefaultChannelPipeline.TailContext.bind(...) 方法，
+                    //  再调用到 AbstractChannel.AbstractUnsafe.bind(...) 方法，
+                    //  最终调用到 NioServerSocketChannel.doBind(...) 方法，完成 jdk channel 的 bind 动作.
+                    channel.bind(localAddress, promise)
+                        .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
                     promise.setFailure(regFuture.cause());
                 }

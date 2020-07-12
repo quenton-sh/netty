@@ -56,7 +56,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     };
 
+    // SQ: 构造方法中赋值为 HeadContext 对象
     final AbstractChannelHandlerContext head;
+
+    // SQ: 构造方法中赋值为 TailContext 对象
     final AbstractChannelHandlerContext tail;
 
     private final Channel channel;
@@ -64,7 +67,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private final VoidChannelPromise voidPromise;
     private final boolean touch = ResourceLeakDetector.isEnabled();
 
+    // SQ: 维护 EventLoopGroup 和 EventLoop 的对应关系；
+    //  通过 EventLoopGroup 的 next() 获取到某一个 EventLoop 后，把双方对应关系保存在这里：
     private Map<EventExecutorGroup, EventExecutor> childExecutors;
+
     private MessageSizeEstimator.Handle estimatorHandle;
     private boolean firstRegistration = true;
 
@@ -89,6 +95,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         succeededFuture = new SucceededChannelFuture(channel, null);
         voidPromise =  new VoidChannelPromise(channel, true);
 
+        // SQ: 此处可以看到，pipeline 中的 head 和 tail 是固定的，构造函数中写死了
         tail = new TailContext(this);
         head = new HeadContext(this);
 
@@ -111,12 +118,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return new DefaultChannelHandlerContext(this, childExecutor(group), name, handler);
     }
 
+    /**
+     * SQ: 相当于调用了 group.next()，从 EventLoopGroup 中 choose 出一个 EventLoop
+     */
     private EventExecutor childExecutor(EventExecutorGroup group) {
         if (group == null) {
             return null;
         }
         Boolean pinEventExecutor = channel.config().getOption(ChannelOption.SINGLE_EVENTEXECUTOR_PER_GROUP);
         if (pinEventExecutor != null && !pinEventExecutor) {
+            // SQ: 默认 SINGLE_EVENTEXECUTOR_PER_GROUP 是 null，不走这个分支
             return group.next();
         }
         Map<EventExecutorGroup, EventExecutor> childExecutors = this.childExecutors;
@@ -196,24 +207,33 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addLast(EventExecutorGroup group, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
-            // SQ: 如果 handler 类不是可共享的（有 @Sharable 注解的 Handler 是可共享的），
-            // 则确认此 handler 未注册给其他 ChannelPipeline，一次可以注册给当前 ChannelPipeline
+            // SQ: 此处检查，如果 handler 类不是可共享的（有 @Sharable 注解的 Handler 是可共享的），
+            //  则确认 handler 未注册给其他 ChannelPipeline，因此可以注册给当前 ChannelPipeline
             checkMultiplicity(handler);
 
-            // newCtx: DefaultChannelHandlerContext 实例
+            // SQ: newCtx: DefaultChannelHandlerContext 实例；
+            //  每个 Handler 外面包一个 context 对象，把 context 对象挂到链表上
             newCtx = newContext(group, filterName(name, handler), handler);
 
+            // SQ: 执行链表操作
             addLast0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.
             // In this case we add the context to the pipeline and add a task that will call
             // ChannelHandler.handlerAdded(...) once the channel is registered.
             if (!registered) {
+                // SQ: 用 ServerBootstrap 做各种设置的时候还没 register (ServerBootstrap 执行 bind 时才 register)，
+                //  这种情况下就会进到这个分支来；
                 newCtx.setAddPending();
+                // SQ: 构造一个任务链表(pendingHandlerCallbackHead)，
+                //  链表中的任务用于对 add 到 Pipeline 上的各个 context 节点调用 handlerAdded 方法，
+                //  此处先把任务记录下来，不调用；
+                //  后续 channel register 时，会调用 pipeline.invokeHandlerAddedIfNeeded()，触发链表结点执行
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
 
+            // 运行时动态添加 Handler 时会进到这个分支
             EventExecutor executor = newCtx.executor();
             if (!executor.inEventLoop()) {
                 newCtx.setAddPending();

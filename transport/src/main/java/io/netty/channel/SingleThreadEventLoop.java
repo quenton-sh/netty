@@ -15,16 +15,16 @@
  */
 package io.netty.channel;
 
+import java.util.Queue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadFactory;
+
 import io.netty.util.concurrent.RejectedExecutionHandler;
 import io.netty.util.concurrent.RejectedExecutionHandlers;
 import io.netty.util.concurrent.SingleThreadEventExecutor;
 import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.UnstableApi;
-
-import java.util.Queue;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * Abstract base class for {@link EventLoop}s that execute all its submitted tasks in a single thread.
@@ -71,6 +71,7 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
 
     @Override
     public ChannelFuture register(Channel channel) {
+        // SQ: NioEventLoop 将 channel 注册到 Selector 的操作在此完成
         return register(new DefaultChannelPromise(channel, this));
     }
 

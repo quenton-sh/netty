@@ -473,6 +473,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             if (eventLoop.inEventLoop()) {
                 register0(promise);
             } else {
+                // SQ: 把 register 动作包装成 task 放到 eventLoop 中执行
                 try {
                     eventLoop.execute(new Runnable() {
                         @Override
@@ -491,8 +492,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
-        // SQ: 在 EventLoop 线程中执行 register0
+        /**
+         * SQ: 这个方法在 EventLoop 线程中执行
+         *  1. 执行 JDK 的 NIO 操作，把 jdk Channel 注册到 Selector 上
+         *  2. 触发 Pipeline 的 handlerAdded 事件，所有 ChannelInitializer 会在这一步被调用
+         */
         private void register0(ChannelPromise promise) {
+            // SQ: 在 EventLoop 线程中执行 register0
             try {
                 // check if the channel is still open as it could be closed in the mean time when the register
                 // call was outside of the eventLoop
@@ -501,7 +507,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 }
                 boolean firstRegistration = neverRegistered;
 
-                // call AbstractNioChannel.doRegister()
+                // SQ: 调用 AbstractNioChannel.doRegister()，
+                //  执行 JDK 的 NIO 操作：向 Selector 注册 Channel
                 doRegister();
 
                 neverRegistered = false;
@@ -509,10 +516,16 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
+
+                // SQ: 在 register 之前（即 Bootstrap 进行初始化阶段）添加的各个 Handler，handlerAdded 事件处理方法尚未被调用，
+                //  通过这个方法统一调用；ChannelInitializer 中的 initChannel 方法都是在这里被调用
                 pipeline.invokeHandlerAddedIfNeeded();
 
+                // SQ: promise 标记为成功，register 完成，将在 AbstractBootstrap 的 doBind0 方法中继续执行 bind 操作
                 safeSetSuccess(promise);
+
                 pipeline.fireChannelRegistered();
+
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
                 if (isActive()) {
@@ -534,6 +547,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * SQ: 这个方法在 EventLoop 线程中执行
+         *  1. 执行 JDK 的 NIO 操作，把 jdk Channel 注册到 Selector 上
+         *  2. 触发 Pipeline 的 handlerAdded 事件，所有 ChannelInitializer 会在这一步被调用
+         */
         @Override
         public final void bind(final SocketAddress localAddress, final ChannelPromise promise) {
             assertEventLoop();
@@ -557,6 +575,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             boolean wasActive = isActive();
             try {
+                // SQ: 调用 NioServerSocketChannel.doBind(...)，
+                //  执行 JDK 的 NIO 操作：channel 进行 bind
                 doBind(localAddress);
             } catch (Throwable t) {
                 safeSetFailure(promise, t);

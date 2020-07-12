@@ -246,7 +246,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 return task;
             } else {
                 // SQ: 定时队列中有任务
-                // 看任务的设定时间距离当前时间有多久
+                //  看任务的设定时间距离当前时间有多久
                 long delayNanos = scheduledTask.delayNanos();
                 Runnable task = null;
                 if (delayNanos > 0) {
@@ -266,7 +266,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
 
                     // SQ: 等待下一个定时任务到期的这段时间里没有普通任务，则等待直到第一个定时任务到期，
-                    // 从定时任务队列拿出来放到普通任务队列中，下一句 taskQueue.poll() 取到的就是这个定时任务；
+                    //  从定时任务队列拿出来放到普通任务队列中，下一句 taskQueue.poll() 取到的就是这个定时任务；
                     fetchFromScheduledTaskQueue();
                     task = taskQueue.poll();
                 }
@@ -279,7 +279,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     }
 
     private boolean fetchFromScheduledTaskQueue() {
-        // SQ：当前时间距 进程启动时间（具体来说是 ScheduledFutureTask 类被加载的时间）的相对时长
+        // SQ: 当前时间距 进程启动时间（具体来说是 ScheduledFutureTask 类被加载的时间）的相对时长
         long nanoTime = AbstractScheduledEventExecutor.nanoTime();
 
         Runnable scheduledTask  = pollScheduledTask(nanoTime);
@@ -743,9 +743,13 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         return isTerminated();
     }
 
-    // SQ: execute 方法的定义来自 java.util.concurrent.Executor 接口；
+
     @Override
     public void execute(Runnable task) {
+        // SQ: execute 方法的定义来自 java.util.concurrent.Executor 接口；
+        //  对于 NioEventLoop 来说，execute 做的事就是把 task 放到队列中，然后就返回了；
+        //  未来主循环会从队列中把 task 拿出来执行；
+
         if (task == null) {
             throw new NullPointerException("task");
         }
@@ -872,7 +876,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean success = false;
                 updateLastExecutionTime();
                 try {
-                    // SQ: 对于子类 NioEventLoop 来说，这一行方法将进入 eventLoop 主循环
+                    // SQ: 对于子类 NioEventLoop 来说，这一行将进入 eventLoop 主循环
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {

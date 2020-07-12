@@ -389,7 +389,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 int strategy = selectStrategy.calculateStrategy(selectNowSupplier, hasTasks());
                 switch (strategy) {
                     case SelectStrategy.CONTINUE:
-                        // SQ：Netty 的默认代码不会进入这一分支
+                        // SQ: Netty 的默认代码不会进入这一分支
                         continue;
                     case SelectStrategy.SELECT:
                         // wakenUp 重置为 false
@@ -634,6 +634,10 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                // SQ: 对于 OP_READ 和 OP_ACCEPT 事件，都执行 read() 方法，
+                //  Channel 的不同实现类在 read 中执行不同行为，
+                //  NioSocketChannel 的 read() 执行读数据，
+                //  NioServerSocketChannel 的 read() 执行 accept 连接；
                 unsafe.read();
             }
         } catch (CancelledKeyException ignored) {

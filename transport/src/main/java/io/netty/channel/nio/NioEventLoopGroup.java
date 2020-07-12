@@ -61,7 +61,7 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
 
     public NioEventLoopGroup(int nThreads, Executor executor) {
         // SQ: 注意此处第三个参数，通过 SelectorProvider.provider() 得到 SelectorProvider，
-        // 后面会一直传递到 newChild(...) 方法中，并最终传递给 EventLoop 的构造方法，用于初始化 EventLoop 中的 Selector.
+        //  后面会一直传递到 newChild(...) 方法中，并最终传递给 EventLoop 的构造方法，用于初始化 EventLoop 中的 Selector.
         this(nThreads, executor, SelectorProvider.provider());
     }
 

@@ -72,6 +72,8 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             try {
                 try {
                     do {
+                        // SQ: 对于 NioServerSocketChannel 来说，doReadMessages 做的事就是 accept 连接请求，
+                        //  把 accept 到的 jdk SocketChannel 包装为 NioSocketChannel 并放到 readBuf 中；
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
                             break;

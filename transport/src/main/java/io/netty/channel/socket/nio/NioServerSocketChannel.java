@@ -86,6 +86,8 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
      * Create a new instance using the given {@link ServerSocketChannel}.
      */
     public NioServerSocketChannel(ServerSocketChannel channel) {
+        // SQ: NioServerSocketChannel 构造时即指定了监听 OP_ACCEPT 事件；
+        //  （对比：NioSocketChannel 在构造时即指定了监听 OP_READ 事件）
         super(null, channel, SelectionKey.OP_ACCEPT);
         config = new NioServerSocketChannelConfig(this, javaChannel().socket());
     }
@@ -127,6 +129,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
+        // SQ: 执行 JDK channel bind 的代码在这里
         if (PlatformDependent.javaVersion() >= 7) {
             javaChannel().bind(localAddress, config.getBacklog());
         } else {
@@ -141,7 +144,10 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
-        // SQ: 对于 NioServerSocketChannel，它的读取操作就是接收客户端的链接并创建 NioSocketChannel 对象
+        // SQ: NioEventLoop 的 processSelectedKey(k, ch) 方法中，对于 select 出来的 OP_READ 事件 和 OP_ACCEPT 事件，
+        //  都会执行 read() 方法，由 channel 的实现类区分 read 的不同逻辑；
+        //  此处，对于 NioServerSocketChannel，它的 read 其实是在响应 OP_ACCEPT 事件，
+        //  即接收客户端的链接并创建 NioSocketChannel 对象；
 
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
