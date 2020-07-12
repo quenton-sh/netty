@@ -15,13 +15,13 @@
  */
 package io.netty.util.concurrent;
 
-import io.netty.util.internal.ObjectUtil;
-
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import io.netty.util.internal.ObjectUtil;
 
 /**
  * Abstract base class for {@link EventExecutor}s that want to support scheduling.
@@ -95,9 +95,13 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         }
 
         if (scheduledTask.deadlineNanos() <= nanoTime) {
+            // SQ: 当前时间已到（或超过）执行时间，可以执行任务了；
+            // 注意取任务时用的是 peek 操作，并未"弹出"任务，因此此处要显式 remove；
             scheduledTaskQueue.remove();
             return scheduledTask;
         }
+
+        // SQ: 时间未到，不执行
         return null;
     }
 

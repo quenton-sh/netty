@@ -16,6 +16,13 @@
 
 package io.netty.bootstrap;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -26,19 +33,12 @@ import io.netty.channel.DefaultChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.ReflectiveChannelFactory;
-import io.netty.util.internal.SocketUtils;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import io.netty.util.internal.SocketUtils;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLogger;
-
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * {@link AbstractBootstrap} is a helper class that makes it easy to bootstrap a {@link Channel}. It support
@@ -280,6 +280,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        // SQ: 创建新 Channel，对其初始化，并将其注册到 EventLoop 上，
+        // 注册的过程在 EventLoop 线程中执行，此处拿到 regFuture 跟进其是否完成
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
@@ -313,8 +315,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             });
             return promise;
         }
-    }
+    } // end of doBind(...)
 
+    // SQ: 创建新 Channel，对其初始化，并将其注册到 EventLoop 上
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
@@ -350,6 +353,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         return regFuture;
     }
 
+    // SQ: ServerBootstrap 和 Bootstrap 的 init 方法不同
     abstract void init(Channel channel) throws Exception;
 
     private static void doBind0(

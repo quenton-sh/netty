@@ -15,17 +15,6 @@
  */
 package io.netty.channel;
 
-import io.netty.channel.Channel.Unsafe;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.ResourceLeakDetector;
-import io.netty.util.concurrent.EventExecutor;
-import io.netty.util.concurrent.EventExecutorGroup;
-import io.netty.util.concurrent.FastThreadLocal;
-import io.netty.util.internal.ObjectUtil;
-import io.netty.util.internal.StringUtil;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -36,6 +25,17 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.WeakHashMap;
 import java.util.concurrent.RejectedExecutionException;
+
+import io.netty.channel.Channel.Unsafe;
+import io.netty.util.ReferenceCountUtil;
+import io.netty.util.ResourceLeakDetector;
+import io.netty.util.concurrent.EventExecutor;
+import io.netty.util.concurrent.EventExecutorGroup;
+import io.netty.util.concurrent.FastThreadLocal;
+import io.netty.util.internal.ObjectUtil;
+import io.netty.util.internal.StringUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * The default {@link ChannelPipeline} implementation.  It is usually created
@@ -196,8 +196,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addLast(EventExecutorGroup group, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
+            // SQ: 如果 handler 类不是可共享的（有 @Sharable 注解的 Handler 是可共享的），
+            // 则确认此 handler 未注册给其他 ChannelPipeline，一次可以注册给当前 ChannelPipeline
             checkMultiplicity(handler);
 
+            // newCtx: DefaultChannelHandlerContext 实例
             newCtx = newContext(group, filterName(name, handler), handler);
 
             addLast0(newCtx);

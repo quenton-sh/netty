@@ -15,15 +15,15 @@
  */
 package io.netty.channel;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadFactory;
+
 import io.netty.util.concurrent.DefaultThreadFactory;
 import io.netty.util.concurrent.EventExecutorChooserFactory;
 import io.netty.util.concurrent.MultithreadEventExecutorGroup;
 import io.netty.util.internal.SystemPropertyUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
-
-import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * Abstract base class for {@link EventLoopGroup} implementations that handles their tasks with multiple threads at
@@ -82,6 +82,7 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
 
     @Override
     public ChannelFuture register(Channel channel) {
+        // 从一组 EventLoop 中选出下一个，并让其执行 register
         return next().register(channel);
     }
 

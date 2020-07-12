@@ -15,17 +15,6 @@
  */
 package io.netty.channel.socket.nio;
 
-import io.netty.channel.ChannelException;
-import io.netty.channel.ChannelMetadata;
-import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.util.internal.SocketUtils;
-import io.netty.channel.nio.AbstractNioMessageChannel;
-import io.netty.channel.socket.DefaultServerSocketChannelConfig;
-import io.netty.channel.socket.ServerSocketChannelConfig;
-import io.netty.util.internal.PlatformDependent;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -35,6 +24,17 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.List;
+
+import io.netty.channel.ChannelException;
+import io.netty.channel.ChannelMetadata;
+import io.netty.channel.ChannelOutboundBuffer;
+import io.netty.channel.nio.AbstractNioMessageChannel;
+import io.netty.channel.socket.DefaultServerSocketChannelConfig;
+import io.netty.channel.socket.ServerSocketChannelConfig;
+import io.netty.util.internal.PlatformDependent;
+import io.netty.util.internal.SocketUtils;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * A {@link io.netty.channel.socket.ServerSocketChannel} implementation which uses
@@ -56,6 +56,9 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
              *
              *  See <a href="https://github.com/netty/netty/issues/2308">#2308</a>.
              */
+
+
+            // SQ: 等同于 ServerSocketChannel.open()
             return provider.openServerSocketChannel();
         } catch (IOException e) {
             throw new ChannelException(
@@ -138,6 +141,8 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        // SQ: 对于 NioServerSocketChannel，它的读取操作就是接收客户端的链接并创建 NioSocketChannel 对象
+
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
         try {

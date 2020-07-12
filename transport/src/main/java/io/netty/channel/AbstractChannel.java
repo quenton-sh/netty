@@ -15,14 +15,6 @@
  */
 package io.netty.channel;
 
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.util.DefaultAttributeMap;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.internal.PlatformDependent;
-import io.netty.util.internal.ThrowableUtil;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -34,7 +26,17 @@ import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.util.DefaultAttributeMap;
+import io.netty.util.ReferenceCountUtil;
+import io.netty.util.internal.PlatformDependent;
+import io.netty.util.internal.ThrowableUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
+
 /**
+ * SQ: 把所有 [IO操作事件] 派发给 ChannelPipeline 进行传播
+ *
  * A skeletal {@link Channel} implementation.
  */
 public abstract class AbstractChannel extends DefaultAttributeMap implements Channel {
@@ -489,6 +491,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        // SQ: 在 EventLoop 线程中执行 register0
         private void register0(ChannelPromise promise) {
             try {
                 // check if the channel is still open as it could be closed in the mean time when the register
@@ -497,7 +500,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+
+                // call AbstractNioChannel.doRegister()
                 doRegister();
+
                 neverRegistered = false;
                 registered = true;
 

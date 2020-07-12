@@ -15,19 +15,19 @@
  */
 package io.netty.channel.nio;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelConfig;
-import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.RecvByteBufAllocator;
-import io.netty.channel.ServerChannel;
-
 import java.io.IOException;
 import java.net.PortUnreachableException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelConfig;
+import io.netty.channel.ChannelOutboundBuffer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.RecvByteBufAllocator;
+import io.netty.channel.ServerChannel;
 
 /**
  * {@link AbstractNioChannel} base class for {@link Channel}s that operate on messages.
@@ -124,6 +124,8 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
 
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
+        // SQ: 代码比 AbstractNioByteChannel 简单，参考 AbstractNioByteChannel 中的代码注释即可
+
         final SelectionKey key = selectionKey();
         final int interestOps = key.interestOps();
 

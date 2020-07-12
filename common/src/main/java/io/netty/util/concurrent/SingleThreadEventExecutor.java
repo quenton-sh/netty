@@ -15,12 +15,6 @@
  */
 package io.netty.util.concurrent;
 
-import io.netty.util.internal.ObjectUtil;
-import io.netty.util.internal.SystemPropertyUtil;
-import io.netty.util.internal.UnstableApi;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.lang.Thread.State;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +34,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+
+import io.netty.util.internal.ObjectUtil;
+import io.netty.util.internal.SystemPropertyUtil;
+import io.netty.util.internal.UnstableApi;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * Abstract base class for {@link OrderedEventExecutor}'s that execute all its submitted tasks in a single thread.
@@ -230,8 +230,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
         BlockingQueue<Runnable> taskQueue = (BlockingQueue<Runnable>) this.taskQueue;
         for (;;) {
+            // SQ: 取任务逻辑，定时任务优先
             ScheduledFutureTask<?> scheduledTask = peekScheduledTask();
             if (scheduledTask == null) {
+                // SQ: 定时任务队列中没有任务
                 Runnable task = null;
                 try {
                     task = taskQueue.take();
@@ -243,9 +245,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 }
                 return task;
             } else {
+                // SQ: 定时队列中有任务
+                // 看任务的设定时间距离当前时间有多久
                 long delayNanos = scheduledTask.delayNanos();
                 Runnable task = null;
                 if (delayNanos > 0) {
+                    // SQ: 下一个定时任务时间还没到，等待的这段时间里，看看有没有普通任务，如果有先执行普通任务
                     try {
                         task = taskQueue.poll(delayNanos, TimeUnit.NANOSECONDS);
                     } catch (InterruptedException e) {
@@ -258,6 +263,10 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                     // scheduled tasks are never executed if there is always one task in the taskQueue.
                     // This is for example true for the read task of OIO Transport
                     // See https://github.com/netty/netty/issues/1614
+
+
+                    // SQ: 等待下一个定时任务到期的这段时间里没有普通任务，则等待直到第一个定时任务到期，
+                    // 从定时任务队列拿出来放到普通任务队列中，下一句 taskQueue.poll() 取到的就是这个定时任务；
                     fetchFromScheduledTaskQueue();
                     task = taskQueue.poll();
                 }
@@ -270,7 +279,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
     }
 
     private boolean fetchFromScheduledTaskQueue() {
+        // SQ：当前时间距 进程启动时间（具体来说是 ScheduledFutureTask 类被加载的时间）的相对时长
         long nanoTime = AbstractScheduledEventExecutor.nanoTime();
+
         Runnable scheduledTask  = pollScheduledTask(nanoTime);
         while (scheduledTask != null) {
             if (!taskQueue.offer(scheduledTask)) {
@@ -732,6 +743,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         return isTerminated();
     }
 
+    // SQ: execute 方法的定义来自 java.util.concurrent.Executor 接口；
     @Override
     public void execute(Runnable task) {
         if (task == null) {
@@ -742,7 +754,9 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
         if (inEventLoop) {
             addTask(task);
         } else {
+            // SQ: 启动EventLoop线程，如果已经启动了则什么都不做
             startThread();
+
             addTask(task);
             if (isShutdown() && removeTask(task)) {
                 reject();
@@ -844,9 +858,12 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
 
     private void doStartThread() {
         assert thread == null;
+        // SQ: new 一个新线程，并执行此 runnable，详见 ThreadPerTaskExecutor.execute 方法
         executor.execute(new Runnable() {
             @Override
             public void run() {
+                // 记录 当前 SingleThreadEventExecutor 对象所关联的线程，
+                // 由于 doStartThread 只会被执行一次（startThread 方法中有控制），因此只会关联到这一个线程，不会再关联其他线程了
                 thread = Thread.currentThread();
                 if (interrupted) {
                     thread.interrupt();
@@ -855,6 +872,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                 boolean success = false;
                 updateLastExecutionTime();
                 try {
+                    // SQ: 对于子类 NioEventLoop 来说，这一行方法将进入 eventLoop 主循环
                     SingleThreadEventExecutor.this.run();
                     success = true;
                 } catch (Throwable t) {
@@ -899,7 +917,7 @@ public abstract class SingleThreadEventExecutor extends AbstractScheduledEventEx
                     }
                 }
             }
-        });
+        }); // end of execute()
     }
 
     private static final class DefaultThreadProperties implements ThreadProperties {

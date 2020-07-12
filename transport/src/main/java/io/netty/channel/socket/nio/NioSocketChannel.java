@@ -15,25 +15,6 @@
  */
 package io.netty.channel.socket.nio;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelException;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.ChannelPromise;
-import io.netty.channel.EventLoop;
-import io.netty.channel.FileRegion;
-import io.netty.channel.RecvByteBufAllocator;
-import io.netty.util.internal.SocketUtils;
-import io.netty.channel.nio.AbstractNioByteChannel;
-import io.netty.channel.socket.DefaultSocketChannelConfig;
-import io.netty.channel.socket.ServerSocketChannel;
-import io.netty.channel.socket.SocketChannelConfig;
-import io.netty.util.concurrent.GlobalEventExecutor;
-import io.netty.util.internal.PlatformDependent;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -43,6 +24,25 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.concurrent.Executor;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelException;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelOutboundBuffer;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.EventLoop;
+import io.netty.channel.FileRegion;
+import io.netty.channel.RecvByteBufAllocator;
+import io.netty.channel.nio.AbstractNioByteChannel;
+import io.netty.channel.socket.DefaultSocketChannelConfig;
+import io.netty.channel.socket.ServerSocketChannel;
+import io.netty.channel.socket.SocketChannelConfig;
+import io.netty.util.concurrent.GlobalEventExecutor;
+import io.netty.util.internal.PlatformDependent;
+import io.netty.util.internal.SocketUtils;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * {@link io.netty.channel.socket.SocketChannel} which uses NIO selector based implementation.
@@ -328,6 +328,8 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     @Override
     protected boolean doConnect(SocketAddress remoteAddress, SocketAddress localAddress) throws Exception {
+        // SQ: 用于客户端向服务端建立链接
+
         if (localAddress != null) {
             doBind0(localAddress);
         }

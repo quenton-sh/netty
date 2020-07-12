@@ -15,6 +15,10 @@
  */
 package io.netty.channel.nio;
 
+import java.io.IOException;
+import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.Channel;
@@ -29,10 +33,6 @@ import io.netty.channel.RecvByteBufAllocator;
 import io.netty.channel.socket.ChannelInputShutdownEvent;
 import io.netty.channel.socket.ChannelInputShutdownReadComplete;
 import io.netty.util.internal.StringUtil;
-
-import java.io.IOException;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
 
 /**
  * {@link AbstractNioChannel} base class for {@link Channel}s that operate on bytes.
@@ -159,12 +159,18 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
     @Override
     protected void doWrite(ChannelOutboundBuffer in) throws Exception {
+        // SQ：write 操作的最大自旋数目
         int writeSpinCount = -1;
 
         boolean setOpWrite = false;
+
+        // SQ: 通过循环处理[写半包]问题
         for (;;) {
             Object msg = in.current();
             if (msg == null) {
+                // SQ: ChannelOutboundBuffer 中所有待发送消息都已处理完毕，不需再写了，
+                // 因此清除 OP_WRITE 标识，并退出循环
+
                 // Wrote all messages.
                 clearOpWrite();
                 // Directly return here so incompleteWrite(...) is not called.
@@ -181,12 +187,19 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
                 boolean done = false;
                 long flushedAmount = 0;
+
                 if (writeSpinCount == -1) {
                     writeSpinCount = config().getWriteSpinCount();
                 }
+
+                // SQ: 自旋 writeSpinCount 次，直到把 buf 中的内容写完
                 for (int i = writeSpinCount - 1; i >= 0; i --) {
+                    // SQ: doWriteBytes: 将 buf 中的内容向[待写Channel]写，怎么写由子类实现
                     int localFlushedAmount = doWriteBytes(buf);
                     if (localFlushedAmount == 0) {
+                        //  SQ: 可写字节数为0，说明[待写Channel]已满，
+                        //  此时再自旋已经没意义，需要先写出去一部分消息腾出[待写Channel]的缓冲区空间，
+                        //  因此设置 opWrite 可写标识为 true
                         setOpWrite = true;
                         break;
                     }
@@ -202,8 +215,11 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
                 if (done) {
                     in.remove();
+                    // SQ: ChannelOutboundBuffer 中当前消息处理完了，继续循环处理下一个消息
                 } else {
                     // Break the loop and so incompleteWrite(...) is called.
+
+                    // SQ: buf中的内容没有全部写到[待写Channel]中，break后进行incompleteWrite处理
                     break;
                 }
             } else if (msg instanceof FileRegion) {
@@ -269,6 +285,8 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     protected final void incompleteWrite(boolean setOpWrite) {
         // Did not write completely.
         if (setOpWrite) {
+            // SQ: [待写Channel]的缓冲区满，开启 OP_WRITE 标识，EventLoop 会将缓冲区的消息写出去，腾出缓冲区空间；
+            // 设置 OP_WRITE 之后就不需要像下面分支这样显式通知 EventLoop 去 flush 了
             setOpWrite();
         } else {
             // Schedule flush again later so other tasks can be picked up in the meantime

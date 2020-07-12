@@ -15,20 +15,20 @@
  */
 package io.netty.channel.nio;
 
+import java.nio.channels.Selector;
+import java.nio.channels.spi.SelectorProvider;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadFactory;
+
 import io.netty.channel.Channel;
-import io.netty.channel.EventLoop;
 import io.netty.channel.DefaultSelectStrategyFactory;
+import io.netty.channel.EventLoop;
 import io.netty.channel.MultithreadEventLoopGroup;
 import io.netty.channel.SelectStrategyFactory;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.EventExecutorChooserFactory;
 import io.netty.util.concurrent.RejectedExecutionHandler;
 import io.netty.util.concurrent.RejectedExecutionHandlers;
-
-import java.nio.channels.Selector;
-import java.nio.channels.spi.SelectorProvider;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * {@link MultithreadEventLoopGroup} implementations which is used for NIO {@link Selector} based {@link Channel}s.
@@ -60,6 +60,8 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
     }
 
     public NioEventLoopGroup(int nThreads, Executor executor) {
+        // SQ: 注意此处第三个参数，通过 SelectorProvider.provider() 得到 SelectorProvider，
+        // 后面会一直传递到 newChild(...) 方法中，并最终传递给 EventLoop 的构造方法，用于初始化 EventLoop 中的 Selector.
         this(nThreads, executor, SelectorProvider.provider());
     }
 

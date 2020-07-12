@@ -15,6 +15,16 @@
  */
 package io.netty.channel.nio;
 
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.nio.channels.CancelledKeyException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.ConnectionPendingException;
+import java.nio.channels.SelectableChannel;
+import java.nio.channels.SelectionKey;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
@@ -33,16 +43,6 @@ import io.netty.util.internal.ThrowableUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.ConnectionPendingException;
-import java.nio.channels.SelectableChannel;
-import java.nio.channels.SelectionKey;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
 /**
  * Abstract base class for {@link Channel} implementations which use a Selector based approach.
  */
@@ -54,7 +54,11 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     private static final ClosedChannelException DO_CLOSE_CLOSED_CHANNEL_EXCEPTION = ThrowableUtil.unknownStackTrace(
             new ClosedChannelException(), AbstractNioChannel.class, "doClose()");
 
+    /**
+     * SQ: SocketChannel 和 ServerSocketChannel 的公共父类
+     */
     private final SelectableChannel ch;
+
     protected final int readInterestOp;
     volatile SelectionKey selectionKey;
     boolean readPending;
@@ -384,7 +388,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         boolean selected = false;
         for (;;) {
             try {
+                // SQ: JDK 的 NIO 操作：向 Selector 注册 Channel
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
+
                 return;
             } catch (CancelledKeyException e) {
                 if (!selected) {

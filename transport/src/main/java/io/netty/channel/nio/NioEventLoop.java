@@ -15,20 +15,6 @@
  */
 package io.netty.channel.nio;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelException;
-import io.netty.channel.EventLoop;
-import io.netty.channel.EventLoopException;
-import io.netty.channel.SelectStrategy;
-import io.netty.channel.SingleThreadEventLoop;
-import io.netty.util.IntSupplier;
-import io.netty.util.concurrent.RejectedExecutionHandler;
-import io.netty.util.internal.PlatformDependent;
-import io.netty.util.internal.ReflectionUtil;
-import io.netty.util.internal.SystemPropertyUtil;
-import io.netty.util.internal.logging.InternalLogger;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.channels.CancelledKeyException;
@@ -47,6 +33,20 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelException;
+import io.netty.channel.EventLoop;
+import io.netty.channel.EventLoopException;
+import io.netty.channel.SelectStrategy;
+import io.netty.channel.SingleThreadEventLoop;
+import io.netty.util.IntSupplier;
+import io.netty.util.concurrent.RejectedExecutionHandler;
+import io.netty.util.internal.PlatformDependent;
+import io.netty.util.internal.ReflectionUtil;
+import io.netty.util.internal.SystemPropertyUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * {@link SingleThreadEventLoop} implementation which register the {@link Channel}'s to a
@@ -158,6 +158,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
 
         if (DISABLE_KEYSET_OPTIMIZATION) {
+            // SQ: 为开启优化选项时，直接把 JDK 原始 Selector 对象返回
             return unwrappedSelector;
         }
 
@@ -193,6 +194,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             @Override
             public Object run() {
                 try {
+                    // SQ: 通过反射获取 JDK 官方 SelectorImpl 类的 selectedKeys 和 publicSelectedKeys 字段
                     Field selectedKeysField = selectorImplClass.getDeclaredField("selectedKeys");
                     Field publicSelectedKeysField = selectorImplClass.getDeclaredField("publicSelectedKeys");
 
@@ -205,6 +207,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                         return cause;
                     }
 
+                    // 通过反射将这俩字段的值对象替换为 selectedKeySet
                     selectedKeysField.set(unwrappedSelector, selectedKeySet);
                     publicSelectedKeysField.set(unwrappedSelector, selectedKeySet);
                     return null;
@@ -379,12 +382,17 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
     @Override
     protected void run() {
+        // SQ: EventLoop 的主循环
         for (;;) {
             try {
-                switch (selectStrategy.calculateStrategy(selectNowSupplier, hasTasks())) {
+                // 有 task，返回 selectNow()；无 task，返回 SELECT
+                int strategy = selectStrategy.calculateStrategy(selectNowSupplier, hasTasks());
+                switch (strategy) {
                     case SelectStrategy.CONTINUE:
+                        // SQ：Netty 的默认代码不会进入这一分支
                         continue;
                     case SelectStrategy.SELECT:
+                        // wakenUp 重置为 false
                         select(wakenUp.getAndSet(false));
 
                         // 'wakenUp.compareAndSet(false, true)' is always evaluated
@@ -426,6 +434,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                 needsToSelectAgain = false;
                 final int ioRatio = this.ioRatio;
                 if (ioRatio == 100) {
+                    // SQ: 不设置 IO 比例，IO任务和其他任务串行执行
                     try {
                         processSelectedKeys();
                     } finally {
@@ -433,11 +442,15 @@ public final class NioEventLoop extends SingleThreadEventLoop {
                         runAllTasks();
                     }
                 } else {
+                    // SQ: 设置了 IO 比例
                     final long ioStartTime = System.nanoTime();
                     try {
+                        // 先执行 IO 操作，记录下总时长
                         processSelectedKeys();
                     } finally {
                         // Ensure we always run tasks.
+
+                        // 根据上一步 IO 操作时长，按 IO 比例计算其他任务可用时长
                         final long ioTime = System.nanoTime() - ioStartTime;
                         runAllTasks(ioTime * (100 - ioRatio) / ioRatio);
                     }
@@ -456,7 +469,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             } catch (Throwable t) {
                 handleLoopException(t);
             }
-        }
+        } // end of "for(;;)"
     }
 
     private static void handleLoopException(Throwable t) {
@@ -706,8 +719,11 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     private void select(boolean oldWakenUp) throws IOException {
         Selector selector = this.selector;
         try {
+            // SQ: select 了多少次
             int selectCnt = 0;
+
             long currentTimeNanos = System.nanoTime();
+            // SQ: 找到最近一个定时任务的执行时间，作为select操作的最大阻塞时间
             long selectDeadLineNanos = currentTimeNanos + delayNanos(currentTimeNanos);
             for (;;) {
                 long timeoutMillis = (selectDeadLineNanos - currentTimeNanos + 500000L) / 1000000L;
